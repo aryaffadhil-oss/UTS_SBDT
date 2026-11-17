@@ -1,0 +1,75 @@
+services:
+  db-primary:
+    image: sbdt-postgres:v1
+    container_name: db-primary
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=sbdt_db
+      - POSTGRES_HOST_AUTH_METHOD=trust
+    command: >
+      postgres
+      -c wal_level=replica
+      -c max_wal_senders=3
+      -c max_replication_slots=3
+      -c hot_standby=on
+      -c listen_addresses='*'
+    volumes:
+      - pg_primary_data:/var/lib/postgresql/data
+    networks:
+      - sbdt-net
+
+  db-replica:
+    image: sbdt-postgres:v1
+    container_name: db-replica
+    ports:
+      - "5433:5432"
+    depends_on:
+      - db-primary
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=sbdt_db
+    entrypoint: ["bash", "/replica-entrypoint.sh"]
+    volumes:
+      - pg_replica_data:/var/lib/postgresql/data
+    networks:
+      - sbdt-net
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    container_name: keycloak
+    command: start-dev
+    ports:
+      - "8080:8080"
+    environment:
+      - KC_BOOTSTRAP_ADMIN_USERNAME=admin
+      - KC_BOOTSTRAP_ADMIN_PASSWORD=admin
+    networks:
+      - sbdt-net
+
+  backend-api:
+    image: backend-api:v1
+    container_name: backend-api
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db-primary
+      - db-replica
+      - keycloak
+    environment:
+      - DB_PRIMARY_URL=postgresql://postgres:postgres@db-primary:5432/sbdt_db
+      - DB_REPLICA_URL=postgresql://postgres:postgres@db-replica:5432/sbdt_db
+      - KEYCLOAK_JWKS_URL=http://keycloak:8080/realms/sbdt-realm/protocol/openid-connect/certs
+    networks:
+      - sbdt-net
+
+volumes:
+  pg_primary_data:
+  pg_replica_data:
+
+networks:
+  sbdt-net:
+    driver: bridge

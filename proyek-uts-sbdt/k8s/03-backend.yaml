@@ -1,0 +1,47 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-api
+spec:
+  type: NodePort
+  selector:
+    app: backend-api
+  ports:
+    - port: 8000
+      targetPort: 8000
+      nodePort: 30081
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: backend-api
+  template:
+    metadata:
+      labels:
+        app: backend-api
+    spec:
+      containers:
+        - name: backend-api
+          image: backend-api:v1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          env:
+            - name: DB_PRIMARY_URL
+              value: "postgresql://postgres:postgres@db-primary:5432/sbdt_db"
+            - name: DB_REPLICA_URL
+              value: "postgresql://postgres:postgres@db-replica:5432/sbdt_db"
+            - name: KEYCLOAK_JWKS_URL
+              value: "http://keycloak:8080/realms/sbdt-realm/protocol/openid-connect/certs"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
